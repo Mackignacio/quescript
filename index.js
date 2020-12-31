@@ -1,31 +1,27 @@
 "use strict";
 
-class QueScript {
-  static CONSTANTS = ["@click"];
-  static EVENTS = ["qsValueChange"];
-  static REGEX_PATTERN = {
-    STR_INTERP: /{{(\w+)}}/g,
-    FUNC_NAME: /^\w+?\(\)$/,
-  };
-
-  static addValueChangeEvent({ target, prop, value }) {
-    document.dispatchEvent(new CustomEvent(QueScript.EVENTS[0], { detail: { target, prop, value } }));
-  }
-
-  static createData(data) {
-    return new Proxy(data, {
-      set: function (target, prop, value) {
-        //   BROADCAST CHANGE
-        QueScript.addValueChangeEvent({ target, prop, value });
-        target[prop] = value;
-      },
-    });
-  }
-}
-
 function $$(el, options = {}) {
-  class QS {
-    element = "";
+  class QueryScript {
+    static CONSTANTS = ["@click"];
+    static EVENTS = ["qsValueChange"];
+    static REGEX_PATTERN = {
+      STR_INTERP: /{{(\w+)}}/g,
+      FUNC_NAME: /^\w+?\(\)$/,
+    };
+
+    static addValueChangeEvent({ target, prop, value }) {
+      document.dispatchEvent(new CustomEvent(QueryScript.EVENTS[0], { detail: { target, prop, value } }));
+    }
+
+    static createData(data) {
+      return new Proxy(data, {
+        set: function (target, prop, value) {
+          //   BROADCAST CHANGE
+          QueryScript.addValueChangeEvent({ target, prop, value });
+          target[prop] = value;
+        },
+      });
+    }
 
     constructor(element, { data = {}, methods = {} } = {}) {
       this.element = element;
@@ -38,14 +34,14 @@ function $$(el, options = {}) {
     }
 
     onEvent(target) {
-      if (target.match(QueScript.REGEX_PATTERN.FUNC_NAME)) {
+      if (target.match(QueryScript.REGEX_PATTERN.FUNC_NAME)) {
         this[target.replace("()", "")]();
       }
     }
 
     mapElement(element) {
       for (const child of element.children) {
-        if (child.innerText.match(QueScript.REGEX_PATTERN.STR_INTERP)) {
+        if (child.innerText.match(QueryScript.REGEX_PATTERN.STR_INTERP)) {
           this.mapStringInterpolation(child);
         }
       }
@@ -53,7 +49,7 @@ function $$(el, options = {}) {
 
     mapStringInterpolation(child) {
       let text = child.innerText;
-      const textMatches = text.matchAll(QueScript.REGEX_PATTERN.STR_INTERP);
+      const textMatches = text.matchAll(QueryScript.REGEX_PATTERN.STR_INTERP);
       const textNode = document.createTextNode("");
       child.innerText = "";
       child.appendChild(textNode);
@@ -63,7 +59,7 @@ function $$(el, options = {}) {
       updateTextNode();
 
       //   LISTENS FOR CHANGES
-      document.addEventListener(QueScript.EVENTS[0], () => updateTextNode());
+      document.addEventListener(QueryScript.EVENTS[0], () => updateTextNode());
     }
 
     mapDataKeys(data) {
@@ -71,7 +67,7 @@ function $$(el, options = {}) {
         this[key] = data[key];
 
         //   LISTENS FOR CHANGES
-        document.addEventListener(QueScript.EVENTS[0], (event) => {
+        document.addEventListener(QueryScript.EVENTS[0], (event) => {
           if (event.detail.prop === key) {
             this[key] = event.detail.value;
           }
@@ -80,24 +76,25 @@ function $$(el, options = {}) {
     }
   }
 
-  const qs = new Proxy(new QS(el, options), {
-    set: function (target, prop, value) {
-      target[prop] = value;
+  if (el) {
+    const qs = new Proxy(new QueryScript(el, options), {
+      set: function (target, prop, value) {
+        target[prop] = value;
 
-      //   BROADCAST CHANGE
-      QueScript.addValueChangeEvent({ target, prop, value });
-      return target[prop];
-    },
-  });
+        //   BROADCAST CHANGE
+        QueryScript.addValueChangeEvent({ target, prop, value });
+        return target[prop];
+      },
+    });
 
-  document.addEventListener("DOMContentLoaded", () => qs.onLoad());
+    document.addEventListener("DOMContentLoaded", () => qs.onLoad());
 
-  document.addEventListener("click", (e) => {
-    if (e.target.hasAttribute(QueScript.CONSTANTS[0])) {
-      qs.onEvent(e.target.getAttribute(QueScript.CONSTANTS[0]));
-    }
-  });
+    document.addEventListener("click", (e) => {
+      if (e.target.hasAttribute(QueryScript.CONSTANTS[0])) {
+        qs.onEvent(e.target.getAttribute(QueryScript.CONSTANTS[0]));
+      }
+    });
+  }
+
+  return QueryScript;
 }
-
-$$["addValueChangeEvent"] = QueScript.addValueChangeEvent;
-$$["createData"] = QueScript.createData;
