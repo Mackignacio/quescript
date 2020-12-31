@@ -2,11 +2,11 @@
 
 function $$(el, options = {}) {
   class QueryScript {
-    static CONSTANTS = ["@click"];
+    static CONSTANTS = ["$$click"];
     static EVENTS = ["qsValueChange"];
     static REGEX_PATTERN = {
       STR_INTERP: /{{(\w+)}}/g,
-      FUNC_NAME: /^\w+?\(\)$/,
+      FUNC_NAME: /^(.*?)\((.*?)\);?$/g,
     };
 
     static addValueChangeEvent({ target, prop, value }) {
@@ -35,7 +35,21 @@ function $$(el, options = {}) {
 
     onEvent(target) {
       if (target.match(QueryScript.REGEX_PATTERN.FUNC_NAME)) {
-        this[target.replace("()", "")]();
+        let funcName = "",
+          funcArgs = "";
+
+        for (const match of target.matchAll(QueryScript.REGEX_PATTERN.FUNC_NAME)) {
+          funcName = match[1];
+          funcArgs = match[2];
+        }
+
+        const mapArgs = (arg) => {
+          const IS_NUMBER = arg.match(/^[0-9]+/g);
+          const IS_VARIABLE = !arg.includes("'") && !arg.includes('"');
+          return IS_NUMBER ? Number(arg) : IS_VARIABLE ? this[arg] : arg.replace(/'|"/g, "");
+        };
+
+        this[funcName](...(funcArgs !== "" ? funcArgs.split(",").map(mapArgs) : []));
       }
     }
 
