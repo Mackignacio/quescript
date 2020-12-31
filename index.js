@@ -9,16 +9,12 @@ function $$(el, options = {}) {
       FUNC_NAME: /^(.*?)\((.*?)\);?$/g,
     };
 
-    static addValueChangeEvent({ target, prop, value }) {
-      document.dispatchEvent(new CustomEvent(QueryScript.EVENTS[0], { detail: { target, prop, value } }));
-    }
-
     static createData(data) {
       return new Proxy(data, {
         set: function (target, prop, value) {
-          //   BROADCAST CHANGE
-          QueryScript.addValueChangeEvent({ target, prop, value });
           target[prop] = value;
+          document.dispatchEvent(new CustomEvent(QueryScript.EVENTS[0], { detail: { target, prop, value } }));
+          return target[prop];
         },
       });
     }
@@ -55,9 +51,7 @@ function $$(el, options = {}) {
 
     mapElement(element) {
       for (const child of element.children) {
-        if (child.innerText.match(QueryScript.REGEX_PATTERN.STR_INTERP)) {
-          this.mapStringInterpolation(child);
-        }
+        if (child.innerText.match(QueryScript.REGEX_PATTERN.STR_INTERP)) this.mapStringInterpolation(child);
       }
     }
 
@@ -78,31 +72,18 @@ function $$(el, options = {}) {
 
     mapDataKeys(data) {
       Object.keys(data).map((key) => {
-        this[key] = data[key];
-
         //   LISTENS FOR CHANGES
+        this[key] = data[key];
         document.addEventListener(QueryScript.EVENTS[0], (event) => {
-          if (event.detail.prop === key) {
-            this[key] = event.detail.value;
-          }
+          if (event.detail.prop === key) this[key] = event.detail.value;
         });
       });
     }
   }
 
   if (el) {
-    const qs = new Proxy(new QueryScript(el, options), {
-      set: function (target, prop, value) {
-        target[prop] = value;
-
-        //   BROADCAST CHANGE
-        QueryScript.addValueChangeEvent({ target, prop, value });
-        return target[prop];
-      },
-    });
-
+    const qs = QueryScript.createData(new QueryScript(el, options));
     document.addEventListener("DOMContentLoaded", () => qs.onLoad());
-
     document.addEventListener("click", (e) => {
       if (e.target.hasAttribute(QueryScript.CONSTANTS[0])) {
         qs.onEvent(e.target.getAttribute(QueryScript.CONSTANTS[0]));
