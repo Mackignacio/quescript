@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div id="app">
+      <p>Welcome {{message}}</p>
+      <button $$click="updateMessage('from Arguments')">Update Message from Text Arguments</button>
+      <button $$click="updateMessage(1)">Update Message from Number Arguments</button>
+      <button $$click="updateMessage(test)">Update Message from Data</button>
+    </div>
+
+    <script src="../../index.js"></script>
+    <script src="./main.js"></script>
+  </body>
+</html>
