@@ -5,7 +5,7 @@ function $$(el, options = {}) {
   const QS_FUN_BUILDER = (body, context = QS) => new Function(`return ${body};`).bind(context);
   const CONSTANTS = ["$$click", "$$if"];
   const EVENTS = ["$$VALUE_CHANGE"];
-  const AST_TOKEN_TYPE = ["Function", "Logical Operator", "Comparison Operator", "String", "Number"];
+  const AST_TOKEN_TYPE = ["Function", "Logical Operator", "Comparison Operator", "String", "Number", "Variable"];
   const REGEX_PATTERN = {
     STR_INTERP: /{{(\w+)}}/g,
     FUNC_NAME: /^([a-zA-Z]*?[0-9]*?)\((.*?)\);?$/g,
@@ -19,8 +19,10 @@ function $$(el, options = {}) {
     static createData(data) {
       return new Proxy(data, {
         set: function (target, prop, value) {
-          target[prop] = value;
-          document.dispatchEvent(new CustomEvent(EVENTS[0], { detail: { target, prop, value } }));
+          if (target[prop] !== value) {
+            target[prop] = value;
+            document.dispatchEvent(new CustomEvent(EVENTS[0], { detail: { target, prop, value } }));
+          }
           return target[prop];
         },
       });
@@ -47,13 +49,13 @@ function $$(el, options = {}) {
       const func = { name: "", args: [], value: "" };
       const mapArgs = (isTextvalue) => (arg) => {
         const IS_NUMBER = arg.match(REGEX_PATTERN.VAR_NUM);
-        const IS_TEXT = (arg.includes("'") && arg.includes('"')) || arg == "";
+        const IS_TEXT = arg.match(REGEX_PATTERN.VAR_STR) || arg == "";
 
         if (!isTextvalue) {
           return IS_NUMBER ? Number(arg) : IS_TEXT ? arg : `this.${arg}`;
         }
 
-        return IS_NUMBER ? Number(arg) : IS_TEXT ? this[arg] : arg.replace(/'|"/g, "");
+        return IS_NUMBER ? Number(arg) : IS_TEXT ? arg.replace(/'|"/g, "") : this[arg];
       };
 
       for (const match of value.matchAll(REGEX_PATTERN.FUNC_NAME)) {
@@ -69,8 +71,8 @@ function $$(el, options = {}) {
       const { FUNC_NAME, LOG_OP, COM_OP, VAR_STR, VAR_NUM } = REGEX_PATTERN;
       // check if value is a function
       if (text.match(FUNC_NAME)) {
-        const { name, value } = this.functionExprBuilder(text);
-        return { type: AST_TOKEN_TYPE[0], name: `this.${name}`, args: value };
+        const { name, args } = this.functionExprBuilder(text);
+        return { type: AST_TOKEN_TYPE[0], name: `this.${name}`, args };
       }
       // check if value is an operator
       if (text.match(LOG_OP) || text.match(COM_OP)) {
@@ -78,7 +80,7 @@ function $$(el, options = {}) {
       }
       // check if value is a string
       if (text.match(VAR_STR)) {
-        return { type: AST_TOKEN_TYPE[3], value: text.replace(/'|"/g, "") };
+        return { type: AST_TOKEN_TYPE[3], value: text };
       }
       // check if value is a number
       if (text.match(VAR_NUM)) {
@@ -90,7 +92,7 @@ function $$(el, options = {}) {
       for (let piece of target.split(" ")) {
         const falsy = "!" === piece[0];
         const value = falsy ? piece.slice(1, piece.length) : piece;
-        const obj = value.match(/^\w+?$/g) ? { type: "Variable", value: `this.${value}` } : this.parseExpr(value);
+        const obj = value.match(/^\w+?$/g) ? { type: AST_TOKEN_TYPE[5], value: `this.${value}` } : this.parseExpr(value);
         expr.push(value.match(REGEX_PATTERN.FUNC_NAME) ? { ...obj, falsy } : obj);
       }
 
@@ -101,9 +103,7 @@ function $$(el, options = {}) {
       let expr = "";
       for (const token of ast) {
         const { type, name = "", value = "", args = [], falsy = false } = token;
-        if (type === AST_TOKEN_TYPE[0]) {
-          expr += `${falsy ? "!" : ""}${name}(${args.join()})`;
-        }
+        expr += type === AST_TOKEN_TYPE[0] ? `${falsy ? "!" : ""}${name}(${args.join()})` : ` ${value}`;
       }
 
       return QS_FUN_BUILDER(expr);
@@ -122,7 +122,11 @@ function $$(el, options = {}) {
       if (child.getAttribute(CONSTANTS[1])) {
         directive = () => {
           const ast = this.createAST(child.getAttribute(CONSTANTS[1]));
-          const expr = this.buildAST(ast);
+          if (this.buildAST(ast)()) {
+            // Show child element
+          } else {
+            // Hide child element
+          }
         };
       }
 
@@ -152,7 +156,9 @@ function $$(el, options = {}) {
         //   LISTENS FOR CHANGES
         this[key] = data[key];
         document.addEventListener(EVENTS[0], (event) => {
-          if (event.detail.prop === key && this[key] !== event.detail.value) this[key] = event.detail.value;
+          if (event.detail.prop === key && this[key] !== event.detail.value) {
+            this[key] = event.detail.value;
+          }
         });
       });
     }
