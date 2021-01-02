@@ -45,7 +45,7 @@ function $$(el, options = {}) {
 
     onEvent(target) {
       if (target.match(REGEX_PATTERN.FUNC_NAME)) {
-        const func = this.functionExprBuilder(value);
+        const func = this.functionExprBuilder(target);
         this[func.name](...func.value);
       }
     }
@@ -54,10 +54,10 @@ function $$(el, options = {}) {
       const func = { name: "", args: [], value: "" };
       const mapArgs = (isTextvalue) => (arg) => {
         const IS_NUMBER = arg.match(REGEX_PATTERN.VAR_NUM);
-        const IS_TEXT = arg.match(REGEX_PATTERN.VAR_STR) || arg == "";
+        const IS_TEXT = arg.match(REGEX_PATTERN.VAR_STR);
 
         if (!isTextvalue) {
-          return IS_NUMBER ? Number(arg) : IS_TEXT ? arg : `this.${arg}`;
+          return IS_NUMBER ? Number(arg) : IS_TEXT || arg === "" ? arg : `this.${arg}`;
         }
 
         return IS_NUMBER ? Number(arg) : IS_TEXT ? arg.replace(/'|"/g, "") : this[arg];
@@ -68,7 +68,7 @@ function $$(el, options = {}) {
         func.args = match[2].split(",").map(mapArgs());
       }
 
-      func.value = func.args !== "" && func.args !== undefined ? func.args.map(mapArgs(true)) : [];
+      func.value = func.args.length > 0 ? func.args.map(mapArgs(true)) : [];
       return func;
     }
 
