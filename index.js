@@ -4,10 +4,11 @@ function $$(el, options = {}) {
   let QS;
   const QS_FUN_BUILDER = (body, context = QS) => new Function(`return ${body};`).bind(context);
   const CONSTANTS = ["$$click", "$$if"];
-  const EVENTS = ["$$VALUE_CHANGE"];
+  const QS_EVENTS = ["$$VALUE_CHANGE"];
   const AST_TOKEN_TYPE = ["Function", "Logical Operator", "Comparison Operator", "String", "Number", "Variable"];
   const REGEX_PATTERN = {
     STR_INTERP: /{{(\w+)}}/g,
+    EXPR: /([a-zA-Z]+?[0-9]*?\(.*?\))|(\&\&)|(\|\|)|(\!)|([!|=]={1,2})|([<|>]=?)|(\'.*?\')|(\w+)|([0-9]+)/g,
     FUNC_NAME: /^([a-zA-Z]*?[0-9]*?)\((.*?)\);?$/g,
     LOG_OP: /^(\&\&)|(\|\|)|\!$/g,
     COM_OP: /^([!|=]={1,2})|([<|>]=?)$/g,
@@ -21,7 +22,7 @@ function $$(el, options = {}) {
         set: function (target, prop, value) {
           if (target[prop] !== value) {
             target[prop] = value;
-            document.dispatchEvent(new CustomEvent(EVENTS[0], { detail: { target, prop, value } }));
+            document.dispatchEvent(new CustomEvent(QS_EVENTS[0], { detail: { target, prop, value } }));
           }
           return target[prop];
         },
@@ -35,7 +36,11 @@ function $$(el, options = {}) {
     }
 
     onLoad() {
-      this.mapElement(document.querySelector(this.element));
+      const events = this.mapElement(document.querySelector(this.element));
+      for (const event of events) {
+        event();
+        document.addEventListener(QS_EVENTS[0], () => event());
+      }
     }
 
     onEvent(target) {
@@ -89,7 +94,8 @@ function $$(el, options = {}) {
     }
 
     createAST(target, expr = []) {
-      for (let piece of target.split(" ")) {
+      for (let match of target.matchAll(REGEX_PATTERN.EXPR)) {
+        const piece = match[0];
         const falsy = "!" === piece[0];
         const value = falsy ? piece.slice(1, piece.length) : piece;
         const obj = value.match(/^\w+?$/g) ? { type: AST_TOKEN_TYPE[5], value: `this.${value}` } : this.parseExpr(value);
@@ -109,53 +115,59 @@ function $$(el, options = {}) {
       return QS_FUN_BUILDER(expr);
     }
 
-    mapElement(element) {
-      for (const child of element.children) {
-        if (child.hasAttribute(CONSTANTS[1])) this.mapDirectives(element, child);
-        if (child.innerText.match(REGEX_PATTERN.STR_INTERP)) this.mapStringInterpolation(child);
+    mapElement(el, parent) {
+      const EVENTS = [];
+
+      if (el.children.length > 0) {
+        for (const child of el.children) {
+          EVENTS.push(...this.mapElement(child, el));
+        }
+        return EVENTS;
       }
-    }
 
-    mapDirectives(parent, child) {
-      let directive = () => {};
+      let STR_INTERP;
+      const NEW_EL = document.createElement(el.tagName);
+      const TEXT_NODE = document.createTextNode(el.innerText);
+      NEW_EL.appendChild(TEXT_NODE);
 
-      if (child.getAttribute(CONSTANTS[1])) {
-        directive = () => {
-          const ast = this.createAST(child.getAttribute(CONSTANTS[1]));
-          if (this.buildAST(ast)()) {
-            // Show child element
-          } else {
-            // Hide child element
+      if (el.innerText.match(REGEX_PATTERN.STR_INTERP)) {
+        STR_INTERP = this.mapStringInterpolation(el.innerText, TEXT_NODE);
+      }
+
+      if (el.hasAttribute(CONSTANTS[1])) {
+        EVENTS.push(() => {
+          el.remove();
+          if (this.mapDirectives(el)()) {
+            parent.append(NEW_EL);
+            if (STR_INTERP) STR_INTERP();
+            return;
           }
-        };
+
+          NEW_EL.remove();
+        });
       }
 
-      directive();
-
-      //   LISTENS FOR CHANGES
-      document.addEventListener(EVENTS[0], () => directive());
+      return EVENTS;
     }
 
-    mapStringInterpolation(child) {
-      let text = child.innerText;
+    mapDirectives(child) {
+      if (child.getAttribute(CONSTANTS[1])) {
+        const ast = this.createAST(child.getAttribute(CONSTANTS[1])); // Create AST tokens
+        return this.buildAST(ast); // Build and Execute expression from AST
+      }
+    }
+
+    mapStringInterpolation(text, textNode) {
       const textMatches = text.matchAll(REGEX_PATTERN.STR_INTERP);
-      const textNode = document.createTextNode("");
-      child.innerText = "";
-      child.appendChild(textNode);
-
       for (const match of textMatches) text = text.replace(new RegExp(`{{${match[1]}}}`, "g"), `$\{this.${match[1]}}`);
-      const updateTextNode = () => (textNode.nodeValue = QS_FUN_BUILDER(`\`${text}\``)());
-      updateTextNode();
-
-      //   LISTENS FOR CHANGES
-      document.addEventListener(EVENTS[0], updateTextNode);
+      return () => (textNode.nodeValue = QS_FUN_BUILDER(`\`${text}\``)());
     }
 
     mapDataKeys(data) {
       Object.keys(data).map((key) => {
         //   LISTENS FOR CHANGES
         this[key] = data[key];
-        document.addEventListener(EVENTS[0], (event) => {
+        document.addEventListener(QS_EVENTS[0], (event) => {
           if (event.detail.prop === key && this[key] !== event.detail.value) {
             this[key] = event.detail.value;
           }
