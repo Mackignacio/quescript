@@ -53,7 +53,16 @@ function $$(el, options = {}) {
         return;
       }
 
-      const ELEMENT_BUILDER = () => {
+      const ELEMENT_BUILDER = this.elementBuilder(component, prev, next);
+
+      ELEMENT_BUILDER();
+      document.addEventListener(QS_EVENTS[0], ELEMENT_BUILDER);
+
+      if (component.children.length > 0) return this.componentResolver(component.children);
+    }
+
+    elementBuilder(component, prev, next) {
+      return () => {
         let SHOWABLE = true;
 
         for (const directive of component.directives) {
@@ -69,11 +78,6 @@ function $$(el, options = {}) {
         if (!next) return component.parent.append(component.el);
         if (prev && next) return component.parent.insertBefore(component.el, next.el);
       };
-
-      ELEMENT_BUILDER();
-      document.addEventListener(QS_EVENTS[0], ELEMENT_BUILDER);
-
-      if (component.children.length > 0) return this.componentResolver(component.children);
     }
 
     onEvent(target) {
