@@ -37,7 +37,45 @@ function $$(el, options = {}) {
     }
 
     mount() {
-      const events = this.mapElement(document.querySelector(this.element));
+      const component = this.mapElement(document.querySelector(this.element));
+      this.componentResolver(component.children);
+    }
+
+    componentResolver(component, prev, next) {
+      if (Array.isArray(component)) {
+        let prev, next;
+
+        for (let i = 0; i < component.length; i++) {
+          next = component[i + 1];
+          this.componentResolver(component[i], prev, next);
+          prev = component[i];
+        }
+        return;
+      }
+
+      let SHOWABLE = true;
+
+      for (const directive of component.directives) {
+        if (SHOWABLE && !directive()) {
+          SHOWABLE = directive();
+          continue;
+        }
+      }
+
+      if (!SHOWABLE) return component.el.remove();
+
+      let ELEMENT_BUILDER = () => {};
+
+      if (SHOWABLE) {
+        ELEMENT_BUILDER = () => {
+          if (typeof component.createText == "function") component.createText();
+        };
+        document.addEventListener(QS_EVENTS[0], ELEMENT_BUILDER);
+      }
+
+      ELEMENT_BUILDER();
+
+      if (component.children.length > 0) return this.componentResolver(component.children);
     }
 
     onEvent(target) {
@@ -139,6 +177,8 @@ function $$(el, options = {}) {
       if (component.text.match(REGEX_PATTERN.STR_INTERP)) {
         component.textNode = document.createTextNode(component.text);
         component.createText = this.mapStringInterpolation(component.text, component.textNode);
+        component.el.textContent = "";
+        component.el.appendChild(component.textNode);
       }
 
       if (component.el.hasAttribute(CONSTANTS[0])) {
