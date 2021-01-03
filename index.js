@@ -53,27 +53,25 @@ function $$(el, options = {}) {
         return;
       }
 
-      let SHOWABLE = true;
+      const ELEMENT_BUILDER = () => {
+        let SHOWABLE = true;
 
-      for (const directive of component.directives) {
-        if (SHOWABLE && !directive()) {
-          SHOWABLE = directive();
-          continue;
+        for (const directive of component.directives) {
+          if (SHOWABLE && !directive()) {
+            SHOWABLE = directive();
+            continue;
+          }
         }
-      }
 
-      if (!SHOWABLE) return component.el.remove();
-
-      let ELEMENT_BUILDER = () => {};
-
-      if (SHOWABLE) {
-        ELEMENT_BUILDER = () => {
-          if (typeof component.createText == "function") component.createText();
-        };
-        document.addEventListener(QS_EVENTS[0], ELEMENT_BUILDER);
-      }
+        if (!SHOWABLE) return component.el.remove();
+        if (typeof component.createText == "function") component.createText();
+        if (!prev) return component.parent.prepend(component.el);
+        if (!next) return component.parent.append(component.el);
+        if (prev && next) return component.parent.insertBefore(component.el, next.el);
+      };
 
       ELEMENT_BUILDER();
+      document.addEventListener(QS_EVENTS[0], ELEMENT_BUILDER);
 
       if (component.children.length > 0) return this.componentResolver(component.children);
     }
@@ -152,13 +150,14 @@ function $$(el, options = {}) {
 
     mapElement(el, parent) {
       const text = el.innerHTML.includes("\n") ? [...el.innerHTML.matchAll(REGEX_PATTERN.INNER_HTML)][0][1] : el.textContent;
+      const attr = (str) => el.getAttribute(str);
       const component = {
         tag: el.tagName,
-        id: el.getAttribute("id"),
-        src: el.getAttribute("src"),
-        class: el.getAttribute("class"),
-        value: el.getAttribute("value"),
-        href: el.getAttribute("href"),
+        id: attr("id"),
+        src: attr("src"),
+        class: attr("class"),
+        value: attr("value"),
+        href: attr("href"),
         children: [],
         directives: [],
         text,
@@ -216,9 +215,7 @@ function $$(el, options = {}) {
         //   LISTENS FOR CHANGES
         this[key] = data[key];
         document.addEventListener(QS_EVENTS[0], (event) => {
-          if (event.detail.prop === key && this[key] !== event.detail.value) {
-            this[key] = event.detail.value;
-          }
+          if (event.detail.prop === key && this[key] !== event.detail.value) this[key] = event.detail.value;
         });
       });
     }
