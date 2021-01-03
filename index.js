@@ -14,6 +14,7 @@ function $$(el, options = {}) {
     COM_OP: /^([!|=]={1,2})|([<|>]=?)$/g,
     VAR_STR: /^\'.*?\'$/g,
     VAR_NUM: /^[0-9]+$/g,
+    INNER_HTML: /^.*?\n\s*(\w*?)\s/g,
   };
 
   class QueryScript {
@@ -35,12 +36,8 @@ function $$(el, options = {}) {
       this.mapDataKeys(methods);
     }
 
-    onLoad() {
+    mount() {
       const events = this.mapElement(document.querySelector(this.element));
-      for (const event of events) {
-        event();
-        document.addEventListener(QS_EVENTS[0], () => event());
-      }
     }
 
     onEvent(target) {
@@ -116,38 +113,49 @@ function $$(el, options = {}) {
     }
 
     mapElement(el, parent) {
-      const EVENTS = [];
+      const text = el.innerHTML.includes("\n") ? [...el.innerHTML.matchAll(REGEX_PATTERN.INNER_HTML)][0][1] : el.textContent;
+      const component = {
+        tag: el.tagName,
+        id: el.getAttribute("id"),
+        src: el.getAttribute("src"),
+        class: el.getAttribute("class"),
+        value: el.getAttribute("value"),
+        href: el.getAttribute("href"),
+        children: [],
+        directives: [],
+        text,
+        el,
+        parent,
+      };
 
       if (el.children.length > 0) {
         for (const child of el.children) {
-          EVENTS.push(...this.mapElement(child, el));
+          component.children.push(this.mapElement(child, el));
         }
-        return EVENTS;
+
+        return component;
       }
 
-      let STR_INTERP;
-      const NEW_EL = document.createElement(el.tagName);
-      const TEXT_NODE = document.createTextNode(el.innerText);
-      NEW_EL.appendChild(TEXT_NODE);
-
-      if (el.innerText.match(REGEX_PATTERN.STR_INTERP)) {
-        STR_INTERP = this.mapStringInterpolation(el.innerText, TEXT_NODE);
+      if (component.text.match(REGEX_PATTERN.STR_INTERP)) {
+        component.textNode = document.createTextNode(component.text);
+        component.createText = this.mapStringInterpolation(component.text, component.textNode);
       }
 
-      if (el.hasAttribute(CONSTANTS[1])) {
-        EVENTS.push(() => {
-          el.remove();
-          if (this.mapDirectives(el)()) {
-            parent.append(NEW_EL);
-            if (STR_INTERP) STR_INTERP();
-            return;
-          }
-
-          NEW_EL.remove();
+      if (component.el.hasAttribute(CONSTANTS[0])) {
+        const eventMethodName = component.el.getAttribute(CONSTANTS[0]);
+        component.el.addEventListener("click", () => {
+          const { name, value } = this.functionExprBuilder(eventMethodName);
+          this[name](...value);
         });
+        component.el.removeAttribute(CONSTANTS[0]);
       }
 
-      return EVENTS;
+      if (component.el.hasAttribute(CONSTANTS[1])) {
+        component.directives.push(this.mapDirectives(el));
+        component.el.removeAttribute(CONSTANTS[1]);
+      }
+
+      return component;
     }
 
     mapDirectives(child) {
@@ -178,10 +186,7 @@ function $$(el, options = {}) {
 
   if (el) {
     QS = QueryScript.createData(new QueryScript(el, options));
-    document.addEventListener("DOMContentLoaded", () => QS.onLoad());
-    document.addEventListener("click", (e) => {
-      if (e.target.hasAttribute(CONSTANTS[0])) QS.onEvent(e.target.getAttribute(CONSTANTS[0]));
-    });
+    QS.mount();
   }
 
   return QueryScript;
